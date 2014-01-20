@@ -1,0 +1,15 @@
+{
+  "name": "sails-s3-temp",
+  "version": "0.0.1",
+  "description": "Temporary implementation of s3 until the sails-s3 is done.",
+  "main": "index.js",
+  "author": {
+    "name": "Dane Stuckel"
+  },
+  "dependencies": {
+    "aws-sdk": "~2.0.0-rc8",
+    "underscore": "~1.5.2",
+    "waterline-criteria": "*"
+  },
+  "readmeFilename": "README.md"
+}
