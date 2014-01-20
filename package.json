@@ -1,7 +1,7 @@
 {
-  "name": "sails-s3-temp",
+  "name": "sails-s3",
   "version": "0.0.1",
-  "description": "Temporary implementation of s3 until the sails-s3 is done.",
+  "description": "Temporary implementation of s3 until the real sails-s3 is done.",
   "main": "index.js",
   "author": {
     "name": "Dane Stuckel"
