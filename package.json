@@ -9,7 +9,8 @@
   "dependencies": {
     "aws-sdk": "~2.0.0-rc8",
     "underscore": "~1.5.2",
-    "waterline-criteria": "*"
+    "waterline-criteria": "*",
+    "temp": "~0.6.0"
   },
   "readmeFilename": "README.md"
 }

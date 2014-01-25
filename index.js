@@ -28,7 +28,7 @@ module.exports = (function() {
     }
 
     function removePrefix (str, config, collectionName) {
-        return str, replace(createPrefix(config, collectionName) + "/", '');
+        return str.replace(createPrefix(config, collectionName) + "/", '');
     }
 
     /**
@@ -44,12 +44,16 @@ module.exports = (function() {
      * Gernric find function
      * @param options
      */
-    function find (collectionName, options, cb) {
-        var params = { Bucket: this.config.bucketName };
+    function find (collection, options, cb) {
+        if (!collection.config.bucketName) {
+            return cb(new Error("Missing bucketName in config"));
+        }
+
+        var params = { Bucket: collection.config.bucketName };
         if (options.limit === 1) {
-            findOne(params, options);
+            findOne(params, collection, options, cb);
         } else {
-            findMany(params, options);
+            findMany(params, collection, options, cb);
         }
     }
 
@@ -59,16 +63,15 @@ module.exports = (function() {
      * @param {{where: {}}} options
      * @param {function} cb
      */
-    function findOne (params, collectionName, options, cb) {
+    function findOne (params, collection, options, cb) {
         if (!options || !options.where || !options.where.id) {
             cb(new Error("Missing id"));
         } else {
-            params.Key = createKey(this.config, collectionName, options.where.id);
+            params.Key = createKey(this.config, collection.identity, options.where.id);
             ifExistsThenPut(options.where, params, 'IfMatch');
             ifExistsThenPut(options.where, params, 'IfModifiedSince');
             ifExistsThenPut(options.where, params, 'iINoneMatch');
             s3.getObject(params, function (err, data) {
-                console.log(err, data);
                 cb(err, data);
             });
         }
@@ -80,7 +83,7 @@ module.exports = (function() {
      * @param {{}} options
      * @param {function} cb
      */
-    function findMany (params, collectionName, options, cb) {
+    function findMany (params, collection, options, cb) {
         if (options.where && options.where.id && options.where.id.startsWith) {
             //the only thing we can do to limit the database request
             params.Prefix += "/" + createKey(options.where.id.startsWith);
@@ -90,13 +93,18 @@ module.exports = (function() {
         }
         s3.listObjects(params, function (err, data) {
             var contents;
+
             if (data && data.Contents) {
                 contents = data.Contents;
                 //filter out unwanted keys with waterline criteria
                 _.each(contents, function (item) {
-                    item.id = removePrefix(item.Key, config, collectionName);
+                    item.id = removePrefix(item.Key, collection.config, collection.identity);
                 });
-                contents = getMatchIndices(contents, options);
+
+                var matchIndices = getMatchIndices(contents, options);
+                contents = _.select(contents, function (model, i) {
+                    return _.contains(matchIndices, i);
+                });
             }
             cb(err, contents);
         });
@@ -108,12 +116,12 @@ module.exports = (function() {
      * @param {{}} options
      * @param {function} cb
      */
-    function destroy (collectionName, options, cb) {
-        find(collectionName, options, function (err, data) {
+    function destroy (collection, options, cb) {
+        find(collection, options, function (err, data) {
             if (err || !data.length) {
                 cb(err, data);
             } else {
-                params = { Bucket: this.config.bucketName };
+                params = { Bucket: collection.config.bucketName };
                 if (data.length === 1) {
                     destroyOne(params, options, data, cb);
                 } else {
@@ -133,7 +141,6 @@ module.exports = (function() {
     function destroyOne (params, options, data, cb) {
         params.Key = data.Key;
         s3.deleteObject(params, function (err, data) {
-            console.log(err, data);
             cb(err, data);
         });
     }
@@ -153,13 +160,13 @@ module.exports = (function() {
         });
 
         s3.deleteObjects(params, function (err, data) {
-            console.log(err, data);
             cb(err, data);
         });
     }
 
     var adapter = {
         syncable: true, // to track schema internally
+        collections: {},
 
         defaults: {
             prefix: '',
@@ -177,7 +184,10 @@ module.exports = (function() {
         /**
          *  It's s3.  This isn't needed.
          */
-        registerCollection: function(collection, cb) { return cb(); },
+        registerCollection: function(collection, cb) {
+            this.collections[collection.identity] = collection;
+            return cb();
+        },
         teardown: function(cb) { cb(); },
         define: function(collectionName, definition, cb) { cb(); },
         describe: function(collectionName, cb) { cb(null, {}); },
@@ -190,7 +200,7 @@ module.exports = (function() {
          * @param  {Function} cb callback
          */
         find: function(collectionName, options, cb) {
-            find(collectionName, options, cb);
+            find(this.collections[collectionName], options, cb);
         },
 
         /**
@@ -203,8 +213,8 @@ module.exports = (function() {
          * @return {[type]}                  [description]
          */
         destroy: function(collectionName, options, cb) {
-            destroy(collectionName, options, cb);
-        }
+            destroy(this.collections[collectionName], options, cb);
+        },
 
         /**
          *
@@ -217,13 +227,13 @@ module.exports = (function() {
         create: function(collectionName, values, cb) {
             //New id that can't be guessed.  Really doesn't matter.
             values.id = Math.floor((Math.random() * 36 * 11)).toString(36); //usually ten characters
+            var collection = this.collections[collectionName];
 
             // base64 to binary, for compression, filters, resizing, or whatever.
-            var buffer = new Buffer(values.body,'base64'),
-                params = {
+            var params = {
                     Bucket: this.config.bucketName,
                     Key: createKey(this.config, collectionName, values.id),
-                    Body: buffer,
+                    Body: values.body,
                     ServerSideEncryption: this.config.serverSideEncryption,
                     StorageClass: values.storageClass || this.config.storageClass
                 };
