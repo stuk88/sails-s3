@@ -67,12 +67,16 @@ module.exports = (function() {
         if (!options || !options.where || !options.where.id) {
             cb(new Error("Missing id"));
         } else {
-            params.Key = createKey(this.config, collection.identity, options.where.id);
+            params.Key = createKey(collection.config, collection.identity, options.where.id);
             ifExistsThenPut(options.where, params, 'IfMatch');
             ifExistsThenPut(options.where, params, 'IfModifiedSince');
             ifExistsThenPut(options.where, params, 'iINoneMatch');
             s3.getObject(params, function (err, data) {
-                cb(err, data);
+                if (data) {
+                    data.id = options.where.id;
+                    data.Key = createKey(collection.config, collection.identity, options.where.id);
+                }
+                cb(err, [data]);
             });
         }
     }
@@ -117,18 +121,25 @@ module.exports = (function() {
      * @param {function} cb
      */
     function destroy (collection, options, cb) {
-        find(collection, options, function (err, data) {
-            if (err || !data.length) {
-                cb(err, data);
-            } else {
-                params = { Bucket: collection.config.bucketName };
-                if (data.length === 1) {
-                    destroyOne(params, options, data, cb);
+
+        console.log("delete", options);
+        var params = { Bucket: collection.config.bucketName };
+
+        if (options.where.id) {
+            destroyOne(params, collection, options, options.where.id, cb);
+        } else {
+            find(collection, options, function (err, data) {
+                if (err || !data.length) {
+                    cb(err, data);
                 } else {
-                    destroyMany(params, options, data, cb);
+                    if (data.length === 1) {
+                        destroyOne(params, collection, options, data[0].id, cb);
+                    } else {
+                        destroyMany(params, collection, options, data, cb);
+                    }
                 }
-            }
-        });
+            });
+        }
     }
 
     /**
@@ -138,9 +149,10 @@ module.exports = (function() {
      * @param {[{}]} data
      * @param {function} cb
      */
-    function destroyOne (params, options, data, cb) {
-        params.Key = data.Key;
+    function destroyOne (params, collection, options, id, cb) {
+        params.Key = createKey(collection.config, collection.identity, id);
         s3.deleteObject(params, function (err, data) {
+            console.log("destroyOne", params, options, err, data);
             cb(err, data);
         });
     }
@@ -152,7 +164,7 @@ module.exports = (function() {
      * @param {[{}]} data
      * @param {function} cb
      */
-    function destroyMany (params, options, data, cb) {
+    function destroyMany (params, collection, options, data, cb) {
         params.Delete = { Objects: [] };
 
         _.each(data, function (item) {
@@ -160,6 +172,7 @@ module.exports = (function() {
         });
 
         s3.deleteObjects(params, function (err, data) {
+            console.log("destroyMany", params, options, err, data);
             cb(err, data);
         });
     }
@@ -233,8 +246,9 @@ module.exports = (function() {
             var params = {
                     Bucket: this.config.bucketName,
                     Key: createKey(this.config, collectionName, values.id),
-                    Body: values.body,
-                    ServerSideEncryption: this.config.serverSideEncryption,
+                    Body: values.Body,
+                    ContentType: 'application/octet-stream',
+                    //ServerSideEncryption: this.config.serverSideEncryption,
                     StorageClass: values.storageClass || this.config.storageClass
                 };
 
@@ -246,6 +260,7 @@ module.exports = (function() {
 
             // Create a single new model (specified by `values`)
             s3.putObject(params, function (err, data) {
+
                 if (data) {
                     data.id = values.id;
                 }
