@@ -1,6 +1,6 @@
 {
   "name": "sails-s3",
-  "version": "0.0.1",
+  "version": "0.1.1",
   "description": "Temporary implementation of s3 until the real sails-s3 is done.",
   "main": "index.js",
   "author": {
