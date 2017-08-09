@@ -14,8 +14,8 @@ module.exports = (function() {
     })
 
     //For some reason, AWS is not detecting my env variables.
-    AWS.config.update({accessKeyId:process.env.AWS_ACCESS_KEY, secretAccessKey:process.env.AWS_SECRET_ACCESS_KEY});
-    AWS.config.update({region:process.env.AWS_REGION});
+    AWS.config.update({accessKeyId:process.env.ORIGINAL_EMAILS_AWS_ACCESS_KEY, secretAccessKey:process.env.ORIGINAL_EMAILS_AWS_SECRET_ACCESS_KEY});
+    AWS.config.update({region:process.env.ORIGINAL_EMAILS_AWS_REGION});
 
     var s3 = new AWS.S3();
 
